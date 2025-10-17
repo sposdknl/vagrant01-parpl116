@@ -1,0 +1,41 @@
+IMAGE_NAME = "kalilinux/rolling"
+
+Vagrant.configure("2") do |config|
+  config.ssh.insert_key = false
+  config.vm.boot_timeout = 600
+
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 2048
+    v.cpus = 2
+  end
+
+  config.vm.define "kali" do |kali|
+    kali.vm.box = IMAGE_NAME
+    kali.vm.hostname = "kali"
+
+    kali.vm.network "forwarded_port", guest: 22, host: 2209, host_ip: "127.0.0.1", auto_correct: false
+    kali.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
+
+    # Provision: Instalace Apache
+    kali.vm.provision "shell", privileged: true, inline: <<-SHELL
+      apt-get update -y
+      apt-get install -y apache2
+      systemctl enable apache2
+      systemctl start apache2
+    SHELL
+
+    # Provision: Nahrání veřejného klíče přes "file"
+    kali.vm.provision "file", source: "id_rsa_kali.pub", destination: "/home/vagrant/id_rsa_kali.pub"
+
+    # Provision: Přidání klíče do authorized_keys a nastavení práv
+    kali.vm.provision "shell", privileged: false, inline: <<-SHELL
+      mkdir -p /home/vagrant/.ssh
+      cat /home/vagrant/id_rsa_kali.pub >> /home/vagrant/.ssh/authorized_keys
+      chown -R vagrant:vagrant /home/vagrant/.ssh
+      chmod 700 /home/vagrant/.ssh
+      chmod 600 /home/vagrant/.ssh/authorized_keys
+    SHELL
+
+    kali.ssh.private_key_path = nil
+  end
+end
